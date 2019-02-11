@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	log.SetLevel(log.DebugLevel)
+
 	botConfig := &bot.Config{
 		ServerURL:   "https://targodan.de",
 		UserID:      "@advent:targodan.de",
@@ -19,7 +21,7 @@ func main() {
 	manConfig := &session.Config{
 		SessionTimeout: 30 * time.Minute,
 		SavePath:       "/tmp/advent/",
-		ExecutablePath: "C:\\tmp\\advent.exe",
+		ExecutablePath: "/home/luca/open-adventure/advent",
 	}
 
 	man := session.NewManager(manConfig)

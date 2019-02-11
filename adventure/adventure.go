@@ -2,10 +2,13 @@ package adventure
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const UserInteractionDelimiter = "> "
@@ -30,7 +33,6 @@ type Adventure struct {
 	quitOut    chan struct{}
 	output     chan string
 	outputUser chan string
-	readError  chan error
 
 	quitErr   chan struct{}
 	errOutput chan string
@@ -47,16 +49,16 @@ func newAdventure(cmd *exec.Cmd) (adv *Adventure, err error) {
 	if err != nil {
 		return
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return
-	}
+	// stderr, err := cmd.StderrPipe()
+	// if err != nil {
+	// 	return
+	// }
 
 	adv = &Adventure{
 		cmd:    cmd,
 		cmdIn:  stdin,
 		cmdOut: stdout,
-		cmdErr: stderr,
+		// cmdErr: stderr,
 	}
 
 	return
@@ -90,6 +92,7 @@ func startsWithDelimiter(data []byte, delimiter []byte) bool {
 }
 
 func splitOutput(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	fmt.Println(string(data))
 	for i := range data {
 		for _, delim := range delimiters {
 			if startsWithDelimiter(data[i:], delim) {
@@ -99,7 +102,7 @@ func splitOutput(data []byte, atEOF bool) (advance int, token []byte, err error)
 	}
 
 	if atEOF {
-		return len(data), data, io.EOF
+		return len(data), data, bufio.ErrFinalToken
 	}
 
 	return 0, nil, nil
@@ -107,13 +110,16 @@ func splitOutput(data []byte, atEOF bool) (advance int, token []byte, err error)
 
 func (adv *Adventure) outputLoop() {
 	defer close(adv.output)
-	defer close(adv.readError)
+	defer log.Debug("Stopped outputLoop.")
+
+	log.Debug("Started outputLoop.")
 
 	scanner := bufio.NewScanner(adv.cmdOut)
 	scanner.Split(splitOutput)
 
 	for scanner.Scan() {
 		output := scanner.Text()
+		log.WithField("text", output).Debug("Output on stdout.")
 
 		select {
 		case adv.output <- output:
@@ -123,12 +129,15 @@ func (adv *Adventure) outputLoop() {
 	}
 
 	if err := scanner.Err(); err != nil && err != io.EOF {
-		adv.readError <- err
+		log.WithError(err).Warn("Error on stdout.")
 	}
 }
 
 func (adv *Adventure) errLoop() {
 	defer close(adv.errOutput)
+	defer log.Debug("Stopped errLoop.")
+
+	log.Debug("Started errLoop.")
 
 	scanner := bufio.NewScanner(adv.cmdErr)
 
@@ -138,6 +147,7 @@ func (adv *Adventure) errLoop() {
 		if output == "" {
 			continue
 		}
+		log.WithField("text", output).Warn("Output on stderr.")
 
 		select {
 		case adv.errOutput <- output:
@@ -147,14 +157,16 @@ func (adv *Adventure) errLoop() {
 	}
 
 	if err := scanner.Err(); err != nil && err != io.EOF {
-		adv.readError <- err
+		log.WithError(err).Warn("Error on stderr.")
 	}
 }
 
 func (adv *Adventure) copyOutputAndLookForSaveDialog() {
 	defer close(adv.outputUser)
 	defer close(adv.saveDialogTicks)
+	defer log.Debug("copyOutputAndLookForSaveDialog stopped.")
 
+	log.Debug("Started copyOutputAndLookForSaveDialog.")
 	for output := range adv.output {
 		if strings.Contains(output, saveDialogFirstPart) || strings.Contains(output, saveDialogSecondPart) {
 			adv.saveDialogTicks <- struct{}{}
@@ -174,12 +186,15 @@ func (adv *Adventure) Start() (output <-chan string, errorOutput <-chan string, 
 	adv.output = make(chan string)
 	adv.outputUser = make(chan string)
 	output = adv.outputUser
-	adv.readError = make(chan error, 1)
 
+	log.Debug("Starting copyOutputAndLookForSaveDialog...")
 	go adv.copyOutputAndLookForSaveDialog()
+	log.Debug("Starting outputLoop...")
 	go adv.outputLoop()
-	go adv.errLoop()
+	// log.Debug("Starting errLoop...")
+	// go adv.errLoop()
 
+	log.Debug("Starting process...")
 	err = adv.cmd.Start()
 
 	if err != nil {
@@ -199,15 +214,18 @@ func (adv *Adventure) Error() (errorOutput <-chan string) {
 
 func (adv *Adventure) Writeln(text string) error {
 	_, err := adv.cmdIn.Write([]byte(text + "\n"))
+	log.WithField("text", text).Debug("Written to process.")
 	return err
 }
 
 func (adv *Adventure) SaveAndClose(saveFile string) error {
+	log.Debugf("Saving to %s...", saveFile)
 	adv.Writeln("save")
 	<-adv.saveDialogTicks
 	adv.Writeln("yes")
 	<-adv.saveDialogTicks
 	adv.Writeln(saveFile)
+	log.Debugf("Saved to %s.", saveFile)
 
 	// TODO: Check stderr for errors
 
@@ -220,6 +238,9 @@ func (adv *Adventure) cleanUp() {
 }
 
 func (adv *Adventure) Close() error {
+	defer log.Debug("Closed.")
+	log.Debug("Closing...")
+
 	adv.cleanUp()
 
 	// Stop the command by closing the stdin
