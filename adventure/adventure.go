@@ -38,7 +38,7 @@ type Adventure struct {
 	saveDialogTicks chan struct{}
 }
 
-func new(cmd *exec.Cmd) (adv *Adventure, err error) {
+func newAdventure(cmd *exec.Cmd) (adv *Adventure, err error) {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return
@@ -63,15 +63,15 @@ func new(cmd *exec.Cmd) (adv *Adventure, err error) {
 }
 
 func New(executable string) (*Adventure, error) {
-	return new(exec.Command(executable))
+	return newAdventure(exec.Command(executable))
 }
 
 func Resume(executable string, saveFile string) (*Adventure, error) {
-	return new(exec.Command(executable, "-r", saveFile))
+	return newAdventure(exec.Command(executable, "-r", saveFile))
 }
 
 func NewOrResume(executable string, saveFile string) (*Adventure, error) {
-	if info, err := os.Stat(saveFile); err != nil && !info.IsDir() {
+	if info, err := os.Stat(saveFile); err == nil && !info.IsDir() {
 		return Resume(executable, saveFile)
 	}
 	return New(executable)
@@ -167,6 +167,7 @@ func (adv *Adventure) copyOutputAndLookForSaveDialog() {
 func (adv *Adventure) Start() (output <-chan string, errorOutput <-chan string, err error) {
 	adv.quitOut = make(chan struct{})
 	adv.quitErr = make(chan struct{})
+	adv.saveDialogTicks = make(chan struct{})
 
 	adv.errOutput = make(chan string)
 	errorOutput = adv.errOutput

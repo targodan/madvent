@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -53,6 +54,7 @@ func (bot *Bot) recvMessage(ev *gomatrix.Event) {
 	if text[0] == commandChar {
 		bot.handleCommand(ev.RoomID, text)
 	} else {
+		// TODO: Start goroutine here?
 		bot.handleGame(ev.RoomID, text)
 	}
 }
@@ -68,7 +70,7 @@ func (bot *Bot) recvRoomMember(ev *gomatrix.Event) {
 }
 
 func (bot *Bot) sendWelcomeMessage(roomID string) {
-	bot.client.SendText(roomID, welcomeText)
+	bot.client.SendText(roomID, fmt.Sprintf(welcomeText, int(bot.config.SyncTimeout.Minutes())))
 }
 
 func (bot *Bot) Run() {

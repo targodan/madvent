@@ -41,6 +41,9 @@ func (man *Manager) GetOrCreateSession(id string) (*Session, error) {
 	sess, ok := man.sessions[id]
 	if !ok || !sess.Valid() {
 		sess, err = newSession(id, man, *man.config)
+		if err != nil {
+			return nil, err
+		}
 		man.sessions[id] = sess
 	}
 
