@@ -3,6 +3,7 @@ package adventure
 import (
 	"bufio"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -65,6 +66,13 @@ func New(executable string) (*Adventure, error) {
 
 func Resume(executable string, saveFile string) (*Adventure, error) {
 	return new(exec.Command(executable, "-r", saveFile))
+}
+
+func NewOrResume(executable string, saveFile string) (*Adventure, error) {
+	if info, err := os.Stat(saveFile); err != nil && !info.IsDir() {
+		return Resume(executable, saveFile)
+	}
+	return New(executable)
 }
 
 func startsWithDelimiter(data []byte, delimiter []byte) bool {
@@ -171,6 +179,10 @@ func (adv *Adventure) Start() (output <-chan string, errorOutput <-chan string, 
 
 	err = adv.cmd.Start()
 
+	if err != nil {
+		adv.cleanUp()
+	}
+
 	return
 }
 
@@ -199,9 +211,13 @@ func (adv *Adventure) SaveAndClose(saveFile string) error {
 	return adv.Close()
 }
 
-func (adv *Adventure) Close() error {
+func (adv *Adventure) cleanUp() {
 	close(adv.quitErr)
 	close(adv.quitOut)
+}
+
+func (adv *Adventure) Close() error {
+	adv.cleanUp()
 
 	// Stop the command by closing the stdin
 	adv.cmdIn.Close()
