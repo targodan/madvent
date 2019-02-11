@@ -8,8 +8,10 @@ import (
 	"strings"
 )
 
+const UserInteractionDelimiter = "> "
+
 var delimiters = [][]byte{
-	[]byte("> "),
+	[]byte(UserInteractionDelimiter),
 	[]byte("File name: "),
 }
 

@@ -25,6 +25,14 @@ func NewManager(config *Config) *Manager {
 	}
 }
 
+func (man *Manager) HasSession(id string) bool {
+	man.sessionsMutex.Lock()
+	defer man.sessionsMutex.Unlock()
+
+	sess, ok := man.sessions[id]
+	return ok && sess.Valid()
+}
+
 func (man *Manager) GetOrCreateSession(id string) (*Session, error) {
 	man.sessionsMutex.Lock()
 	defer man.sessionsMutex.Unlock()
