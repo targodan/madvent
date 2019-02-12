@@ -113,6 +113,11 @@ func (sess *Session) Writeln(text string) error {
 	sess.mutex.Lock()
 	defer sess.mutex.Unlock()
 
+	err := sess.resetTimer()
+	if err != nil {
+		return err
+	}
+
 	return sess.adventure.Writeln(text)
 }
 
