@@ -15,13 +15,13 @@ func main() {
 	botConfig := &bot.Config{
 		ServerURL:   "https://targodan.de",
 		UserID:      "@advent:targodan.de",
-		AccessToken: "MDAxOWxvY2F0aW9uIHRhcmdvZGFuLmRlCjAwMTNpZGVudGlmaWVyIGtleQowMDEwY2lkIGdlbiA9IDEKMDAyNmNpZCB1c2VyX2lkID0gQGFkdmVudDp0YXJnb2Rhbi5kZQowMDE2Y2lkIHR5cGUgPSBhY2Nlc3MKMDAyMWNpZCBub25jZSA9IEdoJnlxYkMwb1ZfVWs3aEgKMDAyZnNpZ25hdHVyZSAJqz_V0_YQrrMk9rWw-gpT58hHjEhYJz3-tGFVaJawugo",
+		AccessToken: "",
 		SyncTimeout: 500 * time.Millisecond,
 	}
 	manConfig := &session.Config{
 		SessionTimeout: 30 * time.Minute,
-		SavePath:       "/tmp/advent/",
-		ExecutablePath: "/home/luca/open-adventure/advent",
+		SavePath:       "/tmp/advent",
+		ExecutablePath: "/usr/bin/advent",
 	}
 
 	man := session.NewManager(manConfig)
