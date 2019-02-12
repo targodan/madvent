@@ -2,7 +2,6 @@ package adventure
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -11,10 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const UserInteractionDelimiter = "> "
-
 var delimiters = [][]byte{
-	[]byte(UserInteractionDelimiter),
+	[]byte("> "),
 	[]byte("File name: "),
 }
 
@@ -49,16 +46,16 @@ func newAdventure(cmd *exec.Cmd) (adv *Adventure, err error) {
 	if err != nil {
 		return
 	}
-	// stderr, err := cmd.StderrPipe()
-	// if err != nil {
-	// 	return
-	// }
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return
+	}
 
 	adv = &Adventure{
 		cmd:    cmd,
 		cmdIn:  stdin,
 		cmdOut: stdout,
-		// cmdErr: stderr,
+		cmdErr: stderr,
 	}
 
 	return
@@ -79,6 +76,17 @@ func NewOrResume(executable string, saveFile string) (*Adventure, error) {
 	return New(executable)
 }
 
+func isScannerErrAcceptable(err error) bool {
+	if err == nil || err == io.EOF {
+		return true
+	}
+	pathError, ok := err.(*os.PathError)
+	if !ok {
+		return false
+	}
+	return pathError.Err == os.ErrClosed
+}
+
 func startsWithDelimiter(data []byte, delimiter []byte) bool {
 	if len(data) < len(delimiter) {
 		return false
@@ -92,11 +100,10 @@ func startsWithDelimiter(data []byte, delimiter []byte) bool {
 }
 
 func splitOutput(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	fmt.Println(string(data))
 	for i := range data {
 		for _, delim := range delimiters {
 			if startsWithDelimiter(data[i:], delim) {
-				return i + len(delim) + 1, data[:i+len(delim)], nil
+				return i + len(delim), data[:i+len(delim)], nil
 			}
 		}
 	}
@@ -117,18 +124,20 @@ func (adv *Adventure) outputLoop() {
 	scanner := bufio.NewScanner(adv.cmdOut)
 	scanner.Split(splitOutput)
 
+loop:
 	for scanner.Scan() {
 		output := scanner.Text()
+		output = strings.Trim(output, " >\t\r\n")
 		log.WithField("text", output).Debug("Output on stdout.")
 
 		select {
 		case adv.output <- output:
 		case <-adv.quitOut:
-			break
+			break loop
 		}
 	}
 
-	if err := scanner.Err(); err != nil && err != io.EOF {
+	if err := scanner.Err(); !isScannerErrAcceptable(err) {
 		log.WithError(err).Warn("Error on stdout.")
 	}
 }
@@ -141,6 +150,7 @@ func (adv *Adventure) errLoop() {
 
 	scanner := bufio.NewScanner(adv.cmdErr)
 
+loop:
 	for scanner.Scan() {
 		output := scanner.Text()
 		output = strings.Trim(output, " \t\r\n")
@@ -152,11 +162,11 @@ func (adv *Adventure) errLoop() {
 		select {
 		case adv.errOutput <- output:
 		case <-adv.quitErr:
-			break
+			break loop
 		}
 	}
 
-	if err := scanner.Err(); err != nil && err != io.EOF {
+	if err := scanner.Err(); !isScannerErrAcceptable(err) {
 		log.WithError(err).Warn("Error on stderr.")
 	}
 }
@@ -191,14 +201,16 @@ func (adv *Adventure) Start() (output <-chan string, errorOutput <-chan string, 
 	go adv.copyOutputAndLookForSaveDialog()
 	log.Debug("Starting outputLoop...")
 	go adv.outputLoop()
-	// log.Debug("Starting errLoop...")
-	// go adv.errLoop()
+	log.Debug("Starting errLoop...")
+	go adv.errLoop()
 
 	log.Debug("Starting process...")
 	err = adv.cmd.Start()
 
 	if err != nil {
 		adv.cleanUp()
+		output = nil
+		errorOutput = nil
 	}
 
 	return

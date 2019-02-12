@@ -3,6 +3,7 @@
 *.o
 *.a
 *.so
+*.out
 
 # Folders
 _obj
@@ -24,3 +25,7 @@ _testmain.go
 *.test
 *.prof
 
+cmd/matrix-open-adventure-bot/matrix-open-adventure-bot
+
+# For now
+vendor/

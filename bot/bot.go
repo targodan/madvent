@@ -8,7 +8,6 @@ import (
 
 	"github.com/matrix-org/gomatrix"
 	log "github.com/sirupsen/logrus"
-	"github.com/targodan/madvent/adventure"
 	"github.com/targodan/madvent/session"
 )
 
@@ -44,7 +43,20 @@ func New(sessMan *session.Manager, config *Config) (bot *Bot, err error) {
 	return bot, nil
 }
 
+func (bot *Bot) filterEvent(ev *gomatrix.Event) (useEvent bool) {
+	if ev.Sender == bot.config.UserID {
+		return false
+	}
+	return true
+}
+
 func (bot *Bot) recvMessage(ev *gomatrix.Event) {
+	if !bot.filterEvent(ev) {
+		return
+	}
+
+	log.WithField("event", ev).Debug("Got message event.")
+
 	text, ok := ev.Body()
 	if !ok {
 		return
@@ -78,6 +90,7 @@ func (bot *Bot) Run() {
 	syncer.OnEventType("m.room.message", bot.recvMessage)
 	syncer.OnEventType("m.room.member", bot.recvRoomMember)
 
+	log.Debug("Bot syncer started.")
 	for {
 		err := bot.client.Sync()
 		if err != nil {
@@ -92,9 +105,6 @@ func (bot *Bot) Run() {
 }
 
 func filterOutput(text string) string {
-	if len(text) > 2 {
-		text = text[:len(text)-len(adventure.UserInteractionDelimiter)]
-	}
 	return strings.Trim(text, " \t\r\n")
 }
 
