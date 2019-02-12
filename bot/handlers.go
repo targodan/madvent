@@ -1,6 +1,9 @@
 package bot
 
-import "strings"
+import (
+	"github.com/sirupsen/logrus"
+	"strings"
+)
 
 func (bot *Bot) handleCommand(roomID, text string) {
 	parts := strings.Split(text, " ")
@@ -16,7 +19,13 @@ func (bot *Bot) handleCommand(roomID, text string) {
 				bot.sendAndLogError(roomID, err)
 				return
 			}
-			sess.Close()
+			err = sess.Save()
+			if err != nil {
+				logrus.WithError(err).Error("Could not save session.")
+				bot.client.SendText(roomID, "Could not save. Please contact an administrator.")
+				return
+			}
+			bot.client.SendText(roomID, "Game saved.")
 		}
 	}
 }

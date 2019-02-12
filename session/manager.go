@@ -6,9 +6,9 @@ import (
 )
 
 type Config struct {
-	SessionTimeout time.Duration
-	SavePath       string
-	ExecutablePath string
+	SessionTimeout time.Duration `yaml:"sessionTimeout"`
+	SavePath       string        `yaml:"savePath"`
+	ExecutablePath string        `yaml:"executablePath"`
 }
 
 type Manager struct {

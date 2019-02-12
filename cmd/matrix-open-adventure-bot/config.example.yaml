@@ -1,0 +1,14 @@
+logger:
+    # Valid level: TRACE/DEBUG/INFO/WARNING/ERROR/FATAL/PANIC
+    level: INFO
+
+bot:
+    serverURL: "https://localhost:8448"
+    userID: "@advent:localhost"
+    accessToken: ""
+    syncTimeout: 500ms
+
+sessionManager:
+    sessionTimeout: 30m
+    savePath: /tmp/advent
+    executablePath: /usr/bin/advent

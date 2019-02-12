@@ -14,10 +14,10 @@ import (
 const commandChar = '!'
 
 type Config struct {
-	ServerURL   string
-	UserID      string
-	AccessToken string
-	SyncTimeout time.Duration
+	ServerURL   string        `yaml:"serverURL"`
+	UserID      string        `yaml:"userID"`
+	AccessToken string        `yaml:"accessToken"`
+	SyncTimeout time.Duration `yaml:"syncTimeout"`
 }
 
 type Bot struct {

@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	log "github.com/sirupsen/logrus"
 	"path"
 	"sync"
 	"time"
@@ -61,7 +62,13 @@ func newSession(id string, manager *Manager, config Config) (*Session, error) {
 		case <-sess.abort:
 			return
 		case <-sess.timer.C:
+			log.Debug("Session timeout expired. Terminating...")
+			err := sess.Save()
+			if err != nil {
+				log.WithError(err).Error("Session could not be saved after timeout.")
+			}
 			sess.Close()
+			log.Debug("Session terminated.")
 		}
 	}()
 
@@ -109,6 +116,17 @@ func (sess *Session) Writeln(text string) error {
 	return sess.adventure.Writeln(text)
 }
 
+func (sess *Session) Save() error {
+	sess.mutex.Lock()
+	defer sess.mutex.Unlock()
+
+	if !sess.Valid() {
+		return nil
+	}
+
+	return sess.adventure.Save(sess.saveFile)
+}
+
 func (sess *Session) Close() {
 	sess.mutex.Lock()
 	defer sess.mutex.Unlock()
@@ -117,7 +135,7 @@ func (sess *Session) Close() {
 		return
 	}
 
-	sess.adventure.SaveAndClose(sess.saveFile)
+	sess.adventure.Close()
 
 	sess.invalidate()
 	sess.manager.removeSession(sess.ID)

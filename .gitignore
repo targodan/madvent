@@ -26,6 +26,9 @@ _testmain.go
 *.prof
 
 cmd/matrix-open-adventure-bot/matrix-open-adventure-bot
+cmd/matrix-open-adventure-bot/config.yaml
 
 # For now
 vendor/
+
+.idea/

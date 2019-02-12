@@ -16,6 +16,7 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c
 	github.com/spf13/cobra v0.0.3 // indirect
 	github.com/spf13/pflag v1.0.3 // indirect
+	github.com/targodan/go-errors v0.0.0-20180112090806-8f9e51621795
 	golang.org/x/arch v0.0.0-20181203225421-5a4828bb7045 // indirect
 	golang.org/x/exp v0.0.0-20190125153040-c74c464bbbf2 // indirect
 	golang.org/x/image v0.0.0-20190209060608-ef4a1470e0dc // indirect

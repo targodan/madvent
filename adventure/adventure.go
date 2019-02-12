@@ -2,12 +2,14 @@ package adventure
 
 import (
 	"bufio"
+	log "github.com/sirupsen/logrus"
+	errors "github.com/targodan/go-errors"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
+	"sync"
+	"time"
 )
 
 var delimiters = [][]byte{
@@ -18,6 +20,7 @@ var delimiters = [][]byte{
 const (
 	saveDialogFirstPart  = "I can suspend your Adventure for you so that you can resume later"
 	saveDialogSecondPart = "File name:"
+	saveDialogSuccess    = "To resume your Adventure, start a new game and then say \"RESUME\"."
 )
 
 type Adventure struct {
@@ -35,6 +38,9 @@ type Adventure struct {
 	errOutput chan string
 
 	saveDialogTicks chan struct{}
+
+	lastInputLock sync.Locker
+	lastInput     string
 }
 
 func newAdventure(cmd *exec.Cmd) (adv *Adventure, err error) {
@@ -56,6 +62,8 @@ func newAdventure(cmd *exec.Cmd) (adv *Adventure, err error) {
 		cmdIn:  stdin,
 		cmdOut: stdout,
 		cmdErr: stderr,
+
+		lastInputLock: &sync.Mutex{},
 	}
 
 	return
@@ -115,6 +123,29 @@ func splitOutput(data []byte, atEOF bool) (advance int, token []byte, err error)
 	return 0, nil, nil
 }
 
+func (adv *Adventure) filterOutput(output string) string {
+	if strings.Contains(output, saveDialogSuccess) {
+		return ""
+	}
+
+	output = strings.Trim(output, " >\t\r\n")
+
+	var lastInput string
+	func() {
+		adv.lastInputLock.Lock()
+		defer adv.lastInputLock.Unlock()
+
+		lastInput = adv.lastInput
+	}()
+
+	if lastInput != "" {
+		output = strings.TrimPrefix(output, lastInput)
+		output = strings.TrimLeft(output, " \t\r\n")
+	}
+
+	return output
+}
+
 func (adv *Adventure) outputLoop() {
 	defer close(adv.output)
 	defer log.Debug("Stopped outputLoop.")
@@ -127,7 +158,10 @@ func (adv *Adventure) outputLoop() {
 loop:
 	for scanner.Scan() {
 		output := scanner.Text()
-		output = strings.Trim(output, " >\t\r\n")
+		output = adv.filterOutput(output)
+		if output == "" {
+			continue
+		}
 		log.WithField("text", output).Debug("Output on stdout.")
 
 		select {
@@ -224,24 +258,44 @@ func (adv *Adventure) Error() (errorOutput <-chan string) {
 	return adv.errOutput
 }
 
-func (adv *Adventure) Writeln(text string) error {
-	_, err := adv.cmdIn.Write([]byte(text + "\n"))
+func (adv *Adventure) write(text string) error {
+	adv.lastInputLock.Lock()
+	defer adv.lastInputLock.Unlock()
+
+	_, err := adv.cmdIn.Write([]byte(text))
+	adv.lastInput = text
+
 	log.WithField("text", text).Debug("Written to process.")
 	return err
 }
 
-func (adv *Adventure) SaveAndClose(saveFile string) error {
+func (adv *Adventure) Writeln(text string) error {
+	return adv.write(text + "\n")
+}
+
+func (adv *Adventure) Save(saveFile string) error {
 	log.Debugf("Saving to %s...", saveFile)
 	adv.Writeln("save")
 	<-adv.saveDialogTicks
 	adv.Writeln("yes")
 	<-adv.saveDialogTicks
 	adv.Writeln(saveFile)
+
+	// TODO: Use an internal error chan here to avoid problems with
+	// the channel being consumed outside of this struct.
+	var errStr string
+	select {
+	case errStr = <-adv.errOutput:
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if errStr != "" {
+		return errors.New(errStr)
+	}
+
 	log.Debugf("Saved to %s.", saveFile)
 
-	// TODO: Check stderr for errors
-
-	return adv.Close()
+	return nil
 }
 
 func (adv *Adventure) cleanUp() {
