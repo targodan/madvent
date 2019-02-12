@@ -1,0 +1,239 @@
+diff --git a/Makefile b/Makefile
+index 546ba81..34eedc7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -9,8 +9,8 @@ VERS=$(shell sed -n <NEWS '/^[0-9]/s/:.*//p' | head -1)
+ 
+ CC?=gcc
+ CCFLAGS+=-std=c99 -D_DEFAULT_SOURCE -DVERSION=\"$(VERS)\" -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-all
+-LIBS=$(shell pkg-config --libs libedit)
+-INC+=$(shell pkg-config --cflags libedit)
++LIBS=
++INC+=
+ 
+ # LLVM/Clang on macOS seems to need -ledit flag for linking
+ UNAME_S := $(shell uname -s)
+@@ -18,8 +18,8 @@ ifeq ($(UNAME_S),Darwin)
+     LIBS += -ledit
+ endif
+ 
+-OBJS=main.o init.o actions.o score.o misc.o saveresume.o
+-CHEAT_OBJS=cheat.o init.o actions.o score.o misc.o saveresume.o
++OBJS=main.o init.o actions.o score.o misc.o saveresume.o readline.o
++CHEAT_OBJS=cheat.o init.o actions.o score.o misc.o saveresume.o readline.o
+ SOURCES=$(OBJS:.o=.c) advent.h adventure.yaml Makefile control make_dungeon.py templates/*.tpl
+ 
+ .c.o:
+diff --git a/main.c b/main.c
+index 5bf7d95..44f7a47 100644
+--- a/main.c
++++ b/main.c
+@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
+             break;
+         case 'o':
+             settings.oldstyle = true;
+-            settings.prompt = false;
++            settings.prompt = true;
+             break;
+ #ifndef ADVENT_NOSAVE
+         case 'r':
+@@ -468,12 +468,12 @@ static void croak(void)
+         terminate(endgame);
+     } else if (!yes(query, yes_response, arbitrary_messages[OK_MAN])
+                || game.numdie == NDEATHS) {
+-        /* Player is asked if he wants to try again. If not, or if 
++        /* Player is asked if he wants to try again. If not, or if
+          * he's already used all of his lives, we end the game */
+         terminate(endgame);
+     } else {
+-        /* If player wishes to continue, we empty the liquids in the 
+-         * user's inventory, turn off the lamp, and drop all items 
++        /* If player wishes to continue, we empty the liquids in the
++         * user's inventory, turn off the lamp, and drop all items
+          * where he died. */
+         game.place[WATER] = game.place[OIL] = LOC_NOWHERE;
+         if (TOTING(LAMP))
+@@ -489,11 +489,11 @@ static void croak(void)
+     }
+ }
+ 
+-static void describe_location(void) 
++static void describe_location(void)
+ /* Describe the location to the user */
+ {
+     const char* msg = locations[game.loc].description.small;
+-    
++
+     if (MOD(game.abbrev[game.loc], game.abbnum) == 0 ||
+         msg == NO_MESSAGE)
+         msg = locations[game.loc].description.big;
+@@ -506,7 +506,7 @@ static void describe_location(void)
+         rspeak(TAME_BEAR);
+ 
+     speak(msg);
+-    
++
+     if (game.loc == LOC_Y2 && PCT(25) && !game.closng)
+         rspeak(SAYS_PLUGH);
+ }
+@@ -992,22 +992,22 @@ static void listobjects(void)
+     }
+ }
+ 
+-bool preprocess_command(command_t *command) 
++bool preprocess_command(command_t *command)
+ /* Pre-processes a command input to see if we need to tease out a few specific cases:
+- * - "enter water" or "enter stream": 
++ * - "enter water" or "enter stream":
+  *   wierd specific case that gets the user wet, and then kicks us back to get another command
+  * - <object> <verb>:
+- *   Irregular form of input, but should be allowed. We switch back to <verb> <object> form for 
++ *   Irregular form of input, but should be allowed. We switch back to <verb> <object> form for
+  *   furtherprocessing.
+  * - "grate":
+- *   If in location with grate, we move to that grate. If we're in a number of other places, 
++ *   If in location with grate, we move to that grate. If we're in a number of other places,
+  *   we move to the entrance.
+  * - "water plant", "oil plant", "water door", "oil door":
+  *   Change to "pour water" or "pour oil" based on context
+  * - "cage bird":
+  *   If bird is present, we change to "carry bird"
+  *
+- * Returns true if pre-processing is complete, and we're ready to move to the primary command 
++ * Returns true if pre-processing is complete, and we're ready to move to the primary command
+  * processing, false otherwise. */
+ {
+     if (command->word[0].type == MOTION && command->word[0].id == ENTER
+@@ -1040,7 +1040,7 @@ bool preprocess_command(command_t *command)
+                     command->word[0].id = ENTRANCE;
+                 }
+             }
+-            if ((command->word[0].id == WATER || command->word[0].id == OIL) && 
++            if ((command->word[0].id == WATER || command->word[0].id == OIL) &&
+                 (command->word[1].id == PLANT || command->word[1].id == DOOR)) {
+                 if (AT(command->word[1].id)) {
+                     command->word[1] = command->word[0];
+@@ -1056,16 +1056,16 @@ bool preprocess_command(command_t *command)
+         }
+ 
+         /* If no word type is given for the first word, we assume it's a motion. */
+-        if(command->word[0].type == NO_WORD_TYPE) 
++        if(command->word[0].type == NO_WORD_TYPE)
+             command->word[0].type = MOTION;
+-        
++
+         command->state = PREPROCESSED;
+         return true;
+     }
+     return false;
+ }
+ 
+-static bool do_move(void) 
++static bool do_move(void)
+ /* Actually execute the move to the new location and dwarf movement */
+ {
+     /*  Can't leave cave once it's closing (except by main office). */
+@@ -1127,7 +1127,7 @@ static bool do_command()
+ 
+         listobjects();
+ 
+-        /* Command not yet given; keep getting commands from user  
++        /* Command not yet given; keep getting commands from user
+          * until valid command is both given and executed. */
+         clear_command(&command);
+         while (command.state <= GIVEN) {
+@@ -1145,7 +1145,7 @@ static bool do_command()
+                 }
+             }
+ 
+-            /* Check to see if the room is dark. If the knife is here, 
++            /* Check to see if the room is dark. If the knife is here,
+              * and it's dark, the knife permanently disappears */
+             game.wzdark = DARK(game.loc);
+             if (game.knfloc != LOC_NOWHERE && game.knfloc != game.loc)
+@@ -1166,7 +1166,7 @@ static bool do_command()
+             }
+ 
+             /* check if game is closed, and exit if it is */
+-            if (closecheck() ) 
++            if (closecheck() )
+                 return true;
+ 
+             /* loop until all words in command are procesed */
+diff --git a/misc.c b/misc.c
+index 3633928..ebded41 100644
+--- a/misc.c
++++ b/misc.c
+@@ -13,7 +13,7 @@
+ #include <stdarg.h>
+ #include <sys/time.h>
+ #include <ctype.h>
+-#include <editline/readline.h>
++#include "readline.h"
+ #include <inttypes.h>
+ 
+ #include "advent.h"
+diff --git a/readline.c b/readline.c
+new file mode 100644
+index 0000000..9a0e873
+--- /dev/null
++++ b/readline.c
+@@ -0,0 +1,23 @@
++#include "readline.h"
++#include <stdio.h>
++#include <string.h>
++
++void add_history(char* input) {}
++
++char* readline(char* prompt) {
++    printf(prompt);
++    fflush(stdout);
++
++    char* line = NULL;
++    size_t size;
++
++    if(getline(&line, &size, stdin) == -1) {
++        // Just to be sure
++        line = NULL;
++    }
++    size_t len = strlen(line);
++    if(line[len-1] == '\n') {
++        line[len-1] = '\0';
++    }
++    return line;
++}
+diff --git a/readline.h b/readline.h
+new file mode 100644
+index 0000000..de21b9e
+--- /dev/null
++++ b/readline.h
+@@ -0,0 +1,7 @@
++#ifndef READLINE_H
++#define READLINE_H
++
++void add_history(char* input);
++char* readline(char* prompt);
++
++#endif
+diff --git a/saveresume.c b/saveresume.c
+index 6e73017..1483343 100644
+--- a/saveresume.c
++++ b/saveresume.c
+@@ -11,7 +11,7 @@
+ 
+ #include <stdlib.h>
+ #include <string.h>
+-#include <editline/readline.h>
++#include "readline.h"
+ #include <time.h>
+ #include <inttypes.h>
+ 
+@@ -72,7 +72,7 @@ int suspend(void)
+             return GO_TOP;
+         fp = fopen(name, WRITE_MODE);
+         if (fp == NULL)
+-            printf("Can't open file %s, try again.\n", name);
++            fprintf(stderr, "Can't open file %s, try again.\n", name);
+         free(name);
+     }
+ 

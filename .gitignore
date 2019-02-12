@@ -32,3 +32,5 @@ cmd/matrix-open-adventure-bot/config.yaml
 vendor/
 
 .idea/
+
+open-adventure/
